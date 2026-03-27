@@ -4,31 +4,32 @@ import * as THREE from "three";
 
 interface LaptopModelProps {
   scrollProgress: number;
-  isBooted: boolean;
+  lidOpenProgress: number;
 }
 
-export const LaptopModel = ({ scrollProgress, isBooted }: LaptopModelProps) => {
+export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const screenLightRef = useRef<THREE.PointLight>(null);
-
-  const screenMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: isBooted ? "#1a0a2e" : "#000000",
-        emissive: isBooted ? "#7c3aed" : "#000000",
-        emissiveIntensity: isBooted ? 0.3 : 0,
-        metalness: 0.1,
-        roughness: 0.2,
-      }),
-    [isBooted]
-  );
+  const ambientGlowRef = useRef<THREE.PointLight>(null);
 
   const bodyMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#1a1a2e",
-        metalness: 0.8,
-        roughness: 0.2,
+        color: "#0a0a12",
+        metalness: 0.9,
+        roughness: 0.15,
+      }),
+    []
+  );
+
+  const screenMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#000000",
+        emissive: "#000000",
+        emissiveIntensity: 0,
+        metalness: 0.1,
+        roughness: 0.05,
       }),
     []
   );
@@ -36,9 +37,9 @@ export const LaptopModel = ({ scrollProgress, isBooted }: LaptopModelProps) => {
   const keyMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#0f0f1a",
-        metalness: 0.5,
-        roughness: 0.4,
+        color: "#050508",
+        metalness: 0.4,
+        roughness: 0.5,
       }),
     []
   );
@@ -46,83 +47,162 @@ export const LaptopModel = ({ scrollProgress, isBooted }: LaptopModelProps) => {
   useFrame((state) => {
     if (!groupRef.current) return;
 
-    // Smooth zoom: camera moves toward laptop screen
-    const zoomZ = THREE.MathUtils.lerp(6, 0.8, Math.min(scrollProgress * 1.5, 1));
-    const zoomY = THREE.MathUtils.lerp(2, 1.65, Math.min(scrollProgress * 1.5, 1));
-    state.camera.position.z = THREE.MathUtils.lerp(state.camera.position.z, zoomZ, 0.05);
-    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, zoomY, 0.05);
-    state.camera.lookAt(0, 1.2, 0);
+    // Screen glow reacts to lid opening
+    const screenGlow = lidOpenProgress > 0.5 ? (lidOpenProgress - 0.5) * 2 : 0;
+    screenMaterial.emissive.setHex(screenGlow > 0 ? 0x1a0a2e : 0x000000);
+    screenMaterial.emissiveIntensity = screenGlow * 0.4;
 
-    // Subtle idle animation when not scrolled
-    if (scrollProgress < 0.05) {
-      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.05;
+    if (screenLightRef.current) {
+      screenLightRef.current.intensity = screenGlow * 2.5;
     }
 
-    // Screen glow
-    if (screenLightRef.current) {
-      screenLightRef.current.intensity = isBooted
-        ? 1 + Math.sin(state.clock.elapsedTime * 2) * 0.2
-        : 0;
+    // Ambient purple glow behind laptop
+    if (ambientGlowRef.current) {
+      ambientGlowRef.current.intensity =
+        0.5 + Math.sin(state.clock.elapsedTime * 0.8) * 0.15 + screenGlow * 1.5;
+    }
+
+    // Camera zoom on scroll
+    const zoomProgress = Math.min(scrollProgress * 2, 1);
+    const targetZ = THREE.MathUtils.lerp(5.5, 1.2, zoomProgress);
+    const targetY = THREE.MathUtils.lerp(1.2, 1.85, zoomProgress);
+    state.camera.position.z = THREE.MathUtils.lerp(state.camera.position.z, targetZ, 0.06);
+    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, targetY, 0.06);
+    state.camera.lookAt(0, 0.9, 0);
+
+    // Subtle idle sway
+    if (scrollProgress < 0.03) {
+      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.25) * 0.03;
+    } else {
+      groupRef.current.rotation.y *= 0.95;
     }
   });
 
-  // Lid angle: open at ~110 degrees
-  const lidAngle = -1.92; // ~110 degrees open
+  // Lid angle: 0 = closed, -1.85 = ~106 degrees open
+  const lidAngle = -1.85 * lidOpenProgress;
+
+  // Keyboard LED positions (small colored dots)
+  const keyLEDs = useMemo(() => {
+    const leds: { x: number; z: number; color: string }[] = [];
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 12; col++) {
+        const hue = (col / 12 + row * 0.1) % 1;
+        const color = `hsl(${hue * 360}, 80%, 50%)`;
+        leds.push({
+          x: -1.1 + col * 0.2,
+          z: -0.6 + row * 0.28,
+          color,
+        });
+      }
+    }
+    return leds;
+  }, []);
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]} rotation={[0.1, 0, 0]}>
-      {/* Base / Bottom */}
-      <mesh material={bodyMaterial} position={[0, 0.05, 0]}>
-        <boxGeometry args={[3, 0.1, 2]} />
+    <group ref={groupRef} position={[0, 0, 0]} rotation={[0.05, 0, 0]}>
+      {/* Ambient purple glow behind laptop */}
+      <pointLight
+        ref={ambientGlowRef}
+        position={[0, 1.5, -2.5]}
+        color="#7c3aed"
+        intensity={0.5}
+        distance={10}
+      />
+
+      {/* Base / Bottom chassis */}
+      <mesh material={bodyMaterial} position={[0, 0.04, 0]}>
+        <boxGeometry args={[3.2, 0.08, 2.1]} />
       </mesh>
 
-      {/* Keyboard area */}
-      <mesh material={keyMaterial} position={[0, 0.11, -0.1]}>
-        <boxGeometry args={[2.6, 0.02, 1.4]} />
+      {/* Bottom edge bevel */}
+      <mesh material={bodyMaterial} position={[0, 0, 0]}>
+        <boxGeometry args={[3.3, 0.02, 2.2]} />
       </mesh>
+
+      {/* Keyboard well */}
+      <mesh material={keyMaterial} position={[0, 0.09, -0.15]}>
+        <boxGeometry args={[2.8, 0.015, 1.5]} />
+      </mesh>
+
+      {/* Individual key LEDs (RGB backlight) */}
+      {lidOpenProgress > 0.3 &&
+        keyLEDs.map((led, i) => (
+          <mesh key={i} position={[led.x, 0.1, led.z]}>
+            <boxGeometry args={[0.14, 0.005, 0.18]} />
+            <meshStandardMaterial
+              color="#0a0a12"
+              emissive={led.color}
+              emissiveIntensity={lidOpenProgress * 0.4}
+              transparent
+              opacity={0.8}
+            />
+          </mesh>
+        ))}
 
       {/* Trackpad */}
-      <mesh position={[0, 0.115, 0.5]}>
-        <boxGeometry args={[0.8, 0.01, 0.5]} />
-        <meshStandardMaterial color="#151525" metalness={0.6} roughness={0.3} />
+      <mesh position={[0, 0.09, 0.55]}>
+        <boxGeometry args={[0.9, 0.008, 0.55]} />
+        <meshStandardMaterial color="#0c0c18" metalness={0.7} roughness={0.2} />
       </mesh>
 
-      {/* Hinge */}
-      <group position={[0, 0.1, -1]}>
+      {/* Front edge indicator LED */}
+      <mesh position={[0, 0.02, 1.05]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshStandardMaterial
+          color="#000"
+          emissive="#3b82f6"
+          emissiveIntensity={lidOpenProgress > 0.1 ? 2 : 0}
+        />
+      </mesh>
+
+      {/* Hinge area */}
+      <group position={[0, 0.08, -1.0]}>
+        {/* Hinge cylinders */}
+        <mesh position={[-0.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.15, 8]} />
+          <meshStandardMaterial color="#0a0a12" metalness={0.9} roughness={0.1} />
+        </mesh>
+        <mesh position={[0.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.15, 8]} />
+          <meshStandardMaterial color="#0a0a12" metalness={0.9} roughness={0.1} />
+        </mesh>
+
         {/* Lid - rotates from hinge */}
         <group rotation={[lidAngle, 0, 0]}>
           {/* Screen back (lid exterior) */}
-          <mesh material={bodyMaterial} position={[0, 0, -1.05]}>
-            <boxGeometry args={[3, 0.08, 2.1]} />
+          <mesh material={bodyMaterial} position={[0, 0, -1.1]}>
+            <boxGeometry args={[3.2, 0.06, 2.2]} />
           </mesh>
 
-          {/* Screen surface */}
-          <mesh material={screenMaterial} position={[0, -0.045, -1.05]}>
-            <boxGeometry args={[2.7, 0.01, 1.8]} />
+          {/* Screen bezel frame */}
+          <mesh position={[0, -0.035, -1.1]}>
+            <boxGeometry args={[3.0, 0.01, 2.05]} />
+            <meshStandardMaterial color="#050508" metalness={0.3} roughness={0.6} />
+          </mesh>
+
+          {/* Screen surface (the actual display) */}
+          <mesh material={screenMaterial} position={[0, -0.042, -1.1]}>
+            <boxGeometry args={[2.75, 0.005, 1.75]} />
           </mesh>
 
           {/* Screen glow light */}
           <pointLight
             ref={screenLightRef}
-            position={[0, -0.2, -1]}
+            position={[0, -0.3, -1.1]}
             color="#a855f7"
             intensity={0}
-            distance={3}
+            distance={4}
           />
 
-          {/* Screen bezel */}
-          {isBooted && (
-            <mesh position={[0, -0.05, -1.05]}>
-              <boxGeometry args={[2.65, 0.005, 1.75]} />
-              <meshStandardMaterial
-                color="#0a0015"
-                emissive="#7c3aed"
-                emissiveIntensity={0.15}
-                transparent
-                opacity={0.9}
-              />
-            </mesh>
-          )}
+          {/* Camera dot */}
+          <mesh position={[0, -0.035, -0.18]}>
+            <sphereGeometry args={[0.02, 8, 8]} />
+            <meshStandardMaterial
+              color="#000"
+              emissive="#22c55e"
+              emissiveIntensity={lidOpenProgress > 0.8 ? 1.5 : 0}
+            />
+          </mesh>
         </group>
       </group>
     </group>
