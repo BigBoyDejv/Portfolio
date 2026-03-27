@@ -1,6 +1,7 @@
 import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { LaptopKeyboard } from "./LaptopKeyboard";
 
 interface LaptopModelProps {
   scrollProgress: number;
@@ -12,12 +13,13 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
   const screenLightRef = useRef<THREE.PointLight>(null);
   const ambientGlowRef = useRef<THREE.PointLight>(null);
 
+  // PBR materials
   const bodyMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#0a0a12",
-        metalness: 0.9,
-        roughness: 0.15,
+        color: "#0a0a10",
+        metalness: 0.85,
+        roughness: 0.18,
       }),
     []
   );
@@ -28,18 +30,18 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
         color: "#000000",
         emissive: "#000000",
         emissiveIntensity: 0,
-        metalness: 0.1,
-        roughness: 0.05,
+        metalness: 0.05,
+        roughness: 0.03,
       }),
     []
   );
 
-  const keyMaterial = useMemo(
+  const edgeMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#050508",
-        metalness: 0.4,
-        roughness: 0.5,
+        color: "#111118",
+        metalness: 0.95,
+        roughness: 0.08,
       }),
     []
   );
@@ -47,22 +49,21 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
   useFrame((state) => {
     if (!groupRef.current) return;
 
-    // Screen glow reacts to lid opening
+    // Screen glow
     const screenGlow = lidOpenProgress > 0.5 ? (lidOpenProgress - 0.5) * 2 : 0;
     screenMaterial.emissive.setHex(screenGlow > 0 ? 0x1a0a2e : 0x000000);
-    screenMaterial.emissiveIntensity = screenGlow * 0.4;
+    screenMaterial.emissiveIntensity = screenGlow * 0.5;
 
     if (screenLightRef.current) {
-      screenLightRef.current.intensity = screenGlow * 2.5;
+      screenLightRef.current.intensity = screenGlow * 3;
     }
 
-    // Ambient purple glow behind laptop
     if (ambientGlowRef.current) {
       ambientGlowRef.current.intensity =
-        0.5 + Math.sin(state.clock.elapsedTime * 0.8) * 0.15 + screenGlow * 1.5;
+        0.4 + Math.sin(state.clock.elapsedTime * 0.8) * 0.1 + screenGlow * 1.2;
     }
 
-    // Camera zoom on scroll
+    // Camera zoom
     const zoomProgress = Math.min(scrollProgress * 2, 1);
     const targetZ = THREE.MathUtils.lerp(5.5, 1.2, zoomProgress);
     const targetY = THREE.MathUtils.lerp(1.8, 2.0, zoomProgress);
@@ -70,7 +71,7 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
     state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, targetY, 0.06);
     state.camera.lookAt(0, 1.2, 0);
 
-    // Subtle idle sway
+    // Idle sway
     if (scrollProgress < 0.03) {
       groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.25) * 0.03;
     } else {
@@ -78,25 +79,7 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
     }
   });
 
-  // Lid angle: 0 = closed (flat), +1.85 = ~106 degrees open (screen faces viewer)
   const lidAngle = 1.85 * lidOpenProgress;
-
-  // Keyboard LED positions
-  const keyLEDs = useMemo(() => {
-    const leds: { x: number; z: number; color: string }[] = [];
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 12; col++) {
-        const hue = (col / 12 + row * 0.1) % 1;
-        const color = `hsl(${hue * 360}, 80%, 50%)`;
-        leds.push({
-          x: -1.1 + col * 0.2,
-          z: -0.6 + row * 0.28,
-          color,
-        });
-      }
-    }
-    return leds;
-  }, []);
 
   return (
     <group ref={groupRef} position={[0, 0, 0]} rotation={[0.08, 0, 0]}>
@@ -105,116 +88,182 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
         ref={ambientGlowRef}
         position={[0, 1.5, -2.5]}
         color="#7c3aed"
-        intensity={0.5}
+        intensity={0.4}
         distance={10}
       />
 
-      {/* Base / Bottom chassis */}
-      <mesh material={bodyMaterial} position={[0, 0.04, 0]}>
-        <boxGeometry args={[3.2, 0.08, 2.1]} />
+      {/* === BASE CHASSIS === */}
+      {/* Main body - with chamfered look */}
+      <mesh material={bodyMaterial} position={[0, 0.035, 0]}>
+        <boxGeometry args={[3.2, 0.07, 2.1]} />
       </mesh>
 
-      {/* Bottom edge bevel */}
-      <mesh material={bodyMaterial} position={[0, 0, 0]}>
-        <boxGeometry args={[3.3, 0.02, 2.2]} />
+      {/* Bottom plate (slightly larger for edge detail) */}
+      <mesh material={edgeMaterial} position={[0, 0.0, 0]}>
+        <boxGeometry args={[3.22, 0.015, 2.12]} />
       </mesh>
 
-      {/* Keyboard well */}
-      <mesh material={keyMaterial} position={[0, 0.09, -0.15]}>
-        <boxGeometry args={[2.8, 0.015, 1.5]} />
+      {/* Front edge chamfer */}
+      <mesh material={edgeMaterial} position={[0, 0.015, 1.06]}>
+        <boxGeometry args={[3.18, 0.03, 0.02]} />
       </mesh>
 
-      {/* Individual key LEDs (RGB backlight) */}
-      {lidOpenProgress > 0.3 &&
-        keyLEDs.map((led, i) => (
-          <mesh key={i} position={[led.x, 0.1, led.z]}>
-            <boxGeometry args={[0.14, 0.005, 0.18]} />
-            <meshStandardMaterial
-              color="#0a0a12"
-              emissive={led.color}
-              emissiveIntensity={lidOpenProgress * 0.4}
-              transparent
-              opacity={0.8}
-            />
-          </mesh>
-        ))}
-
-      {/* Trackpad */}
-      <mesh position={[0, 0.09, 0.55]}>
-        <boxGeometry args={[0.9, 0.008, 0.55]} />
-        <meshStandardMaterial color="#0c0c18" metalness={0.7} roughness={0.2} />
+      {/* Side edges */}
+      <mesh material={edgeMaterial} position={[-1.61, 0.015, 0]}>
+        <boxGeometry args={[0.02, 0.03, 2.1]} />
+      </mesh>
+      <mesh material={edgeMaterial} position={[1.61, 0.015, 0]}>
+        <boxGeometry args={[0.02, 0.03, 2.1]} />
       </mesh>
 
-      {/* Front edge indicator LED */}
-      <mesh position={[0, 0.02, 1.05]}>
-        <sphereGeometry args={[0.015, 8, 8]} />
-        <meshStandardMaterial
-          color="#000"
-          emissive="#3b82f6"
-          emissiveIntensity={lidOpenProgress > 0.1 ? 2 : 0}
-        />
+      {/* Ventilation grills (back) */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <mesh key={`vent-${i}`} position={[-0.7 + i * 0.2, 0.072, -1.0]} material={edgeMaterial}>
+          <boxGeometry args={[0.12, 0.003, 0.06]} />
+        </mesh>
+      ))}
+
+      {/* === KEYBOARD === */}
+      <LaptopKeyboard lidOpenProgress={lidOpenProgress} />
+
+      {/* === TRACKPAD === */}
+      <mesh position={[0, 0.075, 0.58]}>
+        <boxGeometry args={[0.85, 0.005, 0.5]} />
+        <meshStandardMaterial color="#08080e" metalness={0.6} roughness={0.25} />
+      </mesh>
+      {/* Trackpad border */}
+      <mesh position={[0, 0.074, 0.58]}>
+        <boxGeometry args={[0.87, 0.002, 0.52]} />
+        <meshStandardMaterial color="#111118" metalness={0.8} roughness={0.1} />
       </mesh>
 
-      {/* Red indicator LED (left side, like reference) */}
-      <mesh position={[-1.2, 0.1, 0.2]}>
-        <sphereGeometry args={[0.02, 8, 8]} />
+      {/* === LED INDICATORS === */}
+      {/* Red LED - left side near keyboard */}
+      <mesh position={[-1.25, 0.09, 0.15]}>
+        <sphereGeometry args={[0.018, 8, 8]} />
         <meshStandardMaterial
           color="#000"
           emissive="#ef4444"
           emissiveIntensity={lidOpenProgress > 0.1 ? 3 : 0}
         />
       </mesh>
+      {/* Small red glow */}
+      {lidOpenProgress > 0.1 && (
+        <pointLight position={[-1.25, 0.1, 0.15]} color="#ef4444" intensity={0.15} distance={0.3} />
+      )}
 
-      {/* Hinge area - at the BACK of the laptop */}
-      <group position={[0, 0.08, -1.0]}>
-        {/* Hinge cylinders */}
-        <mesh position={[-0.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.04, 0.04, 0.15, 8]} />
-          <meshStandardMaterial color="#0a0a12" metalness={0.9} roughness={0.1} />
-        </mesh>
-        <mesh position={[0.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.04, 0.04, 0.15, 8]} />
-          <meshStandardMaterial color="#0a0a12" metalness={0.9} roughness={0.1} />
+      {/* Blue LED - right side */}
+      <mesh position={[1.15, 0.09, -0.55]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshStandardMaterial
+          color="#000"
+          emissive="#3b82f6"
+          emissiveIntensity={lidOpenProgress > 0.1 ? 2.5 : 0}
+        />
+      </mesh>
+
+      {/* Front edge LED strip */}
+      <mesh position={[0, 0.015, 1.055]}>
+        <boxGeometry args={[0.6, 0.003, 0.005]} />
+        <meshStandardMaterial
+          color="#000"
+          emissive="#7c3aed"
+          emissiveIntensity={lidOpenProgress > 0.2 ? lidOpenProgress * 1.5 : 0}
+        />
+      </mesh>
+
+      {/* === HINGE === */}
+      <group position={[0, 0.07, -1.0]}>
+        {/* Hinge bar */}
+        <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.035, 0.035, 2.6, 12]} />
+          <meshStandardMaterial color="#0a0a10" metalness={0.9} roughness={0.1} />
         </mesh>
 
-        {/* Lid - rotates from hinge. Positive X rotation swings -Z upward */}
+        {/* Hinge caps */}
+        <mesh position={[-1.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.1, 12]} />
+          <meshStandardMaterial color="#111118" metalness={0.95} roughness={0.05} />
+        </mesh>
+        <mesh position={[1.35, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.04, 0.04, 0.1, 12]} />
+          <meshStandardMaterial color="#111118" metalness={0.95} roughness={0.05} />
+        </mesh>
+
+        {/* === LID (rotates from hinge) === */}
         <group rotation={[lidAngle, 0, 0]}>
-          {/* Lid panel (exterior back) */}
-          <mesh material={bodyMaterial} position={[0, -0.03, -1.1]}>
-            <boxGeometry args={[3.2, 0.06, 2.2]} />
+          {/* Lid back panel */}
+          <mesh material={bodyMaterial} position={[0, -0.025, -1.1]}>
+            <boxGeometry args={[3.2, 0.05, 2.2]} />
           </mesh>
 
-          {/* Screen bezel (inner frame) */}
-          <mesh position={[0, 0.005, -1.1]}>
-            <boxGeometry args={[3.0, 0.01, 2.05]} />
-            <meshStandardMaterial color="#050508" metalness={0.3} roughness={0.6} />
+          {/* Lid logo area - subtle emboss */}
+          <mesh position={[0, -0.052, -1.1]}>
+            <boxGeometry args={[0.4, 0.002, 0.25]} />
+            <meshStandardMaterial color="#0c0c14" metalness={0.95} roughness={0.05} />
           </mesh>
 
-          {/* Screen surface (inner face, facing +Y = toward viewer when open) */}
-          <mesh material={screenMaterial} position={[0, 0.012, -1.1]}>
-            <boxGeometry args={[2.75, 0.005, 1.75]} />
+          {/* Screen bezel */}
+          <mesh position={[0, 0.003, -1.1]}>
+            <boxGeometry args={[3.05, 0.008, 2.1]} />
+            <meshStandardMaterial color="#050508" metalness={0.2} roughness={0.7} />
           </mesh>
 
-          {/* Screen glow light (shines forward from screen) */}
+          {/* Screen display */}
+          <mesh material={screenMaterial} position={[0, 0.008, -1.1]}>
+            <boxGeometry args={[2.8, 0.004, 1.8]} />
+          </mesh>
+
+          {/* Screen glow light */}
           <pointLight
             ref={screenLightRef}
-            position={[0, 0.3, -1.1]}
+            position={[0, 0.4, -1.1]}
             color="#a855f7"
             intensity={0}
-            distance={4}
+            distance={5}
           />
 
-          {/* Camera dot (top center of screen bezel) */}
-          <mesh position={[0, 0.005, -0.18]}>
-            <sphereGeometry args={[0.02, 8, 8]} />
+          {/* Camera dot */}
+          <mesh position={[0, 0.004, -0.12]}>
+            <sphereGeometry args={[0.018, 8, 8]} />
             <meshStandardMaterial
               color="#000"
               emissive="#ef4444"
-              emissiveIntensity={lidOpenProgress > 0.8 ? 1.5 : 0}
+              emissiveIntensity={lidOpenProgress > 0.8 ? 1.2 : 0}
             />
+          </mesh>
+
+          {/* Camera housing */}
+          <mesh position={[0, 0.004, -0.12]}>
+            <boxGeometry args={[0.12, 0.006, 0.035]} />
+            <meshStandardMaterial color="#0a0a10" metalness={0.5} roughness={0.3} />
           </mesh>
         </group>
       </group>
+
+      {/* === GROUND SHADOW === */}
+      <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[4.5, 3.5]} />
+        <meshStandardMaterial
+          color="#000000"
+          transparent
+          opacity={0.4}
+          metalness={0.1}
+          roughness={0.9}
+        />
+      </mesh>
+
+      {/* Reflective ground plane */}
+      <mesh position={[0, -0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[8, 6]} />
+        <meshStandardMaterial
+          color="#050508"
+          metalness={0.9}
+          roughness={0.15}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
     </group>
   );
 };
