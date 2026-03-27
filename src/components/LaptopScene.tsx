@@ -10,7 +10,7 @@ interface LaptopSceneProps {
 const LaptopScene = ({ scrollProgress, lidOpenProgress }: LaptopSceneProps) => {
   return (
     <Canvas
-      camera={{ position: [0, 1.2, 5.5], fov: 40 }}
+      camera={{ position: [0, 2.5, 4.5], fov: 40 }}
       style={{ background: "transparent" }}
       gl={{ antialias: true, alpha: true }}
       dpr={[1, 2]}
