@@ -65,10 +65,10 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
     // Camera zoom on scroll
     const zoomProgress = Math.min(scrollProgress * 2, 1);
     const targetZ = THREE.MathUtils.lerp(5.5, 1.2, zoomProgress);
-    const targetY = THREE.MathUtils.lerp(1.2, 1.85, zoomProgress);
+    const targetY = THREE.MathUtils.lerp(1.8, 2.0, zoomProgress);
     state.camera.position.z = THREE.MathUtils.lerp(state.camera.position.z, targetZ, 0.06);
     state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, targetY, 0.06);
-    state.camera.lookAt(0, 0.9, 0);
+    state.camera.lookAt(0, 1.2, 0);
 
     // Subtle idle sway
     if (scrollProgress < 0.03) {
@@ -78,10 +78,10 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
     }
   });
 
-  // Lid angle: 0 = closed, -1.85 = ~106 degrees open
-  const lidAngle = -1.85 * lidOpenProgress;
+  // Lid angle: 0 = closed (flat), +1.85 = ~106 degrees open (screen faces viewer)
+  const lidAngle = 1.85 * lidOpenProgress;
 
-  // Keyboard LED positions (small colored dots)
+  // Keyboard LED positions
   const keyLEDs = useMemo(() => {
     const leds: { x: number; z: number; color: string }[] = [];
     for (let row = 0; row < 4; row++) {
@@ -99,7 +99,7 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
   }, []);
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]} rotation={[0.05, 0, 0]}>
+    <group ref={groupRef} position={[0, 0, 0]} rotation={[0.08, 0, 0]}>
       {/* Ambient purple glow behind laptop */}
       <pointLight
         ref={ambientGlowRef}
@@ -155,7 +155,17 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
         />
       </mesh>
 
-      {/* Hinge area */}
+      {/* Red indicator LED (left side, like reference) */}
+      <mesh position={[-1.2, 0.1, 0.2]}>
+        <sphereGeometry args={[0.02, 8, 8]} />
+        <meshStandardMaterial
+          color="#000"
+          emissive="#ef4444"
+          emissiveIntensity={lidOpenProgress > 0.1 ? 3 : 0}
+        />
+      </mesh>
+
+      {/* Hinge area - at the BACK of the laptop */}
       <group position={[0, 0.08, -1.0]}>
         {/* Hinge cylinders */}
         <mesh position={[-0.8, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
@@ -167,39 +177,39 @@ export const LaptopModel = ({ scrollProgress, lidOpenProgress }: LaptopModelProp
           <meshStandardMaterial color="#0a0a12" metalness={0.9} roughness={0.1} />
         </mesh>
 
-        {/* Lid - rotates from hinge */}
+        {/* Lid - rotates from hinge. Positive X rotation swings -Z upward */}
         <group rotation={[lidAngle, 0, 0]}>
-          {/* Screen back (lid exterior) */}
-          <mesh material={bodyMaterial} position={[0, 0, -1.1]}>
+          {/* Lid panel (exterior back) */}
+          <mesh material={bodyMaterial} position={[0, -0.03, -1.1]}>
             <boxGeometry args={[3.2, 0.06, 2.2]} />
           </mesh>
 
-          {/* Screen bezel frame */}
-          <mesh position={[0, -0.035, -1.1]}>
+          {/* Screen bezel (inner frame) */}
+          <mesh position={[0, 0.005, -1.1]}>
             <boxGeometry args={[3.0, 0.01, 2.05]} />
             <meshStandardMaterial color="#050508" metalness={0.3} roughness={0.6} />
           </mesh>
 
-          {/* Screen surface (the actual display) */}
-          <mesh material={screenMaterial} position={[0, -0.042, -1.1]}>
+          {/* Screen surface (inner face, facing +Y = toward viewer when open) */}
+          <mesh material={screenMaterial} position={[0, 0.012, -1.1]}>
             <boxGeometry args={[2.75, 0.005, 1.75]} />
           </mesh>
 
-          {/* Screen glow light */}
+          {/* Screen glow light (shines forward from screen) */}
           <pointLight
             ref={screenLightRef}
-            position={[0, -0.3, -1.1]}
+            position={[0, 0.3, -1.1]}
             color="#a855f7"
             intensity={0}
             distance={4}
           />
 
-          {/* Camera dot */}
-          <mesh position={[0, -0.035, -0.18]}>
+          {/* Camera dot (top center of screen bezel) */}
+          <mesh position={[0, 0.005, -0.18]}>
             <sphereGeometry args={[0.02, 8, 8]} />
             <meshStandardMaterial
               color="#000"
-              emissive="#22c55e"
+              emissive="#ef4444"
               emissiveIntensity={lidOpenProgress > 0.8 ? 1.5 : 0}
             />
           </mesh>
